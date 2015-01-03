@@ -96,7 +96,8 @@ class CurlStream
         }
         curl_setopt($ch, CURLOPT_URL, $path);
 
-        $context = stream_context_get_options($this->context);
+        $params = stream_context_get_params($this->context);
+        $context = $params['options'];
         if (isset($context['http']['method']) && $context['http']['method'] === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
         } else {
@@ -107,6 +108,35 @@ class CurlStream
         }
         if (isset($context['http']['content'])) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $context['http']['content']);
+        }
+
+        if (isset($params['notification'])) {
+            $callbackGet = $params['notification'];
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION,
+                function($ch, $downbytesMax, $downbytes, $upbytesMax, $upbytes)
+                use($callbackGet)
+                {
+                    static $bytesMaxSended = false;
+                    if ($downbytes) {
+                        $code = $bytesMaxSended ?
+                            STREAM_NOTIFY_PROGRESS :
+                            STREAM_NOTIFY_FILE_SIZE_IS;
+                        call_user_func(
+                            $callbackGet,
+                            $code, //notificationCode
+                            STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                            '', //message
+                            0, //messageCode
+                            $downbytes, //bytesTransferred
+                            $downbytesMax //bytesMax
+                        );
+                    }
+                    return 0;
+                }
+            );
+        } else {
+            curl_setopt($ch, CURLOPT_NOPROGReSS, true);
         }
 
         $result = curl_exec($ch);
