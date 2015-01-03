@@ -17,6 +17,8 @@ use Composer\Config;
 use Composer\IO\IOInterface;
 use Composer\Downloader\TransportException;
 
+require_once __DIR__ . '/curlstream.php';
+
 /**
  * @author François Pluchino <francois.pluchino@opendisplay.com>
  * @author Jordi Boggiano <j.boggiano@seld.be>
@@ -172,6 +174,7 @@ class RemoteFilesystem
         });
         try {
             $result = file_get_contents($fileUrl, false, $ctx);
+            $http_response_header = \CurlStream::getLastHeaders();
         } catch (\Exception $e) {
             if ($e instanceof TransportException && !empty($http_response_header[0])) {
                 $e->setHeaders($http_response_header);
@@ -199,32 +202,6 @@ class RemoteFilesystem
                 throw $e;
             }
             $result = false;
-        }
-
-        // decode gzip
-        if ($result && extension_loaded('zlib') && substr($fileUrl, 0, 4) === 'http') {
-            $decode = false;
-            foreach ($http_response_header as $header) {
-                if (preg_match('{^content-encoding: *gzip *$}i', $header)) {
-                    $decode = true;
-                    continue;
-                } elseif (preg_match('{^HTTP/}i', $header)) {
-                    $decode = false;
-                }
-            }
-
-            if ($decode) {
-                if (version_compare(PHP_VERSION, '5.4.0', '>=')) {
-                    $result = zlib_decode($result);
-                } else {
-                    // work around issue with gzuncompress & co that do not work with all gzip checksums
-                    $result = file_get_contents('compress.zlib://data:application/octet-stream;base64,'.base64_encode($result));
-                }
-
-                if (!$result) {
-                    throw new TransportException('Failed to decode zlib stream');
-                }
-            }
         }
 
         if ($this->progress && !$this->retry) {
