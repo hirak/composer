@@ -184,8 +184,12 @@ class CurlStream
 //public array url_stat ( string $path , int $flags )
 }
 
-stream_wrapper_unregister('http');
-stream_wrapper_unregister('https');
+if (in_array('http', stream_get_wrappers())) {
+    stream_wrapper_unregister('http');
+}
+if (in_array('https', stream_get_wrappers())) {
+    stream_wrapper_unregister('https');
+}
 stream_wrapper_register('http', 'CurlStream');
 stream_wrapper_register('https', 'CurlStream');
 
