@@ -118,10 +118,14 @@ class CurlStream
                 use($callbackGet)
                 {
                     static $bytesMaxSended = false;
+                    //error_log("$downbytes / $downbytesMax");
                     if ($downbytes) {
-                        $code = $bytesMaxSended ?
-                            STREAM_NOTIFY_PROGRESS :
-                            STREAM_NOTIFY_FILE_SIZE_IS;
+                        if ($bytesMaxSended) {
+                            $code = STREAM_NOTIFY_PROGRESS;
+                        } else {
+                            $code = STREAM_NOTIFY_FILE_SIZE_IS;
+                            $bytesMaxSended = true;
+                        }
                         call_user_func(
                             $callbackGet,
                             $code, //notificationCode
@@ -136,7 +140,7 @@ class CurlStream
                 }
             );
         } else {
-            curl_setopt($ch, CURLOPT_NOPROGReSS, true);
+            curl_setopt($ch, CURLOPT_NOPROGRESS, true);
         }
 
         $result = curl_exec($ch);
@@ -150,6 +154,31 @@ class CurlStream
         self::$header = explode("\r\n", rtrim($header));
         $this->body = substr($result, $info['header_size']);
         $this->length = strlen($this->body);
+
+        if (isset($params['notification'])) {
+            $callbackGet = $params['notification'];
+            if (401 === $info['http_code']) {
+                call_user_func(
+                    $callbackGet,
+                    STREAM_NOTIFY_AUTH_REQUIRED, //notificationCode
+                    STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                    '', //message
+                    0, //messageCode
+                    $info['download_content_length'], //bytesTransferred
+                    $info['download_content_length'] //bytesMax
+                );
+            } elseif (403 === $info['http_code']) {
+                call_user_func(
+                    $callbackGet,
+                    STREAM_NOTIFY_AUTH_RESULT, //notificationCode
+                    STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                    '', //message
+                    0, //messageCode
+                    $info['download_content_length'], //bytesTransferred
+                    $info['download_content_length'] //bytesMax
+                );
+            }
+        }
 
         $this->ch = $ch;
         return true;
