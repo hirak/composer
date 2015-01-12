@@ -118,23 +118,29 @@ class CurlStream
                 use($callbackGet)
                 {
                     static $bytesMaxSended = false;
-                    //error_log("$downbytes / $downbytesMax");
-                    if ($downbytes) {
+                    static $prevDownbytes = 0;
+
+                    if (
+                        $downbytes &&
+                        $downbytesMax &&
+                        ($prevDownbytes < $downbytes)
+                    ) {
                         if ($bytesMaxSended) {
-                            $code = STREAM_NOTIFY_PROGRESS;
+                            $code = \STREAM_NOTIFY_PROGRESS;
                         } else {
-                            $code = STREAM_NOTIFY_FILE_SIZE_IS;
+                            $code = \STREAM_NOTIFY_FILE_SIZE_IS;
                             $bytesMaxSended = true;
                         }
                         call_user_func(
                             $callbackGet,
                             $code, //notificationCode
-                            STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                            \STREAM_NOTIFY_SEVERITY_INFO, //severity
                             '', //message
                             0, //messageCode
                             $downbytes, //bytesTransferred
                             $downbytesMax //bytesMax
                         );
+                        $prevDownbytes = $downbytes;
                     }
                     return 0;
                 }
@@ -161,7 +167,7 @@ class CurlStream
                 call_user_func(
                     $callbackGet,
                     STREAM_NOTIFY_AUTH_REQUIRED, //notificationCode
-                    STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                    STREAM_NOTIFY_SEVERITY_ERR, //severity
                     '', //message
                     0, //messageCode
                     $info['download_content_length'], //bytesTransferred
@@ -171,7 +177,7 @@ class CurlStream
                 call_user_func(
                     $callbackGet,
                     STREAM_NOTIFY_AUTH_RESULT, //notificationCode
-                    STREAM_NOTIFY_SEVERIRY_INFO, //severity
+                    STREAM_NOTIFY_SEVERITY_ERR, //severity
                     '', //message
                     0, //messageCode
                     $info['download_content_length'], //bytesTransferred

@@ -267,7 +267,7 @@ class RemoteFilesystem
      * @param  integer            $bytesMax         The total size
      * @throws TransportException
      */
-    protected function callbackGet($notificationCode, $severity, $message, $messageCode, $bytesTransferred, $bytesMax)
+    public function callbackGet($notificationCode, $severity, $message, $messageCode, $bytesTransferred, $bytesMax)
     {
         switch ($notificationCode) {
             case STREAM_NOTIFY_FAILURE:
@@ -301,10 +301,10 @@ class RemoteFilesystem
                     $progression = 0;
 
                     if ($this->bytesMax > 0) {
-                        $progression = round($bytesTransferred / $this->bytesMax * 100);
+                        $progression = round($bytesTransferred / $this->bytesMax * 20) * 5;
                     }
 
-                    if ((0 === $progression % 5) && $progression !== $this->lastProgress) {
+                    if ($progression !== $this->lastProgress) {
                         $this->lastProgress = $progression;
                         $this->io->overwrite("    Downloading: <comment>$progression%</comment>", false);
                     }
