@@ -174,7 +174,9 @@ class RemoteFilesystem
         });
         try {
             $result = file_get_contents($fileUrl, false, $ctx);
-            $http_response_header = \CurlStream::getLastHeaders();
+            if (0 === strpos($fileUrl, 'http')) {
+                $http_response_header = \CurlStream::getLastHeaders();
+            }
         } catch (\Exception $e) {
             if ($e instanceof TransportException && !empty($http_response_header[0])) {
                 $e->setHeaders($http_response_header);
