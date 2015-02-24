@@ -576,23 +576,129 @@ class JsonManipulatorTest extends \PHPUnit_Framework_TestCase
             ),
             'fails on deep arrays with borked texts' => array(
                 '{
-    "repositories": [{
-        "package": { "bar": "ba[z" }
-    }]
+    "repositories": [
+        {
+            "package": { "bar": "ba[z" }
+        }
+    ]
 }',
                 'bar',
                 false
             ),
             'fails on deep arrays with borked texts2' => array(
                 '{
-    "repositories": [{
-        "package": { "bar": "ba]z" }
-    }]
+    "repositories": [
+        {
+            "package": { "bar": "ba]z" }
+        }
+    ]
 }',
                 'bar',
                 false
             ),
         );
+    }
+
+    public function testRemoveSubNodeFromRequire()
+    {
+        $manipulator = new JsonManipulator('{
+    "repositories": [
+        {
+            "package": {
+                "require": {
+                    "this/should-not-end-up-in-root-require": "~2.0"
+                },
+                "require-dev": {
+                    "this/should-not-end-up-in-root-require-dev": "~2.0"
+                }
+            }
+        }
+    ],
+    "require": {
+        "package/a": "*",
+        "package/b": "*",
+        "package/c": "*"
+    },
+    "require-dev": {
+        "package/d": "*"
+    }
+}');
+
+        $this->assertTrue($manipulator->removeSubNode('require', 'package/c'));
+        $this->assertTrue($manipulator->removeSubNode('require-dev', 'package/d'));
+        $this->assertEquals('{
+    "repositories": [
+        {
+            "package": {
+                "require": {
+                    "this/should-not-end-up-in-root-require": "~2.0"
+                },
+                "require-dev": {
+                    "this/should-not-end-up-in-root-require-dev": "~2.0"
+                }
+            }
+        }
+    ],
+    "require": {
+        "package/a": "*",
+        "package/b": "*"
+    },
+    "require-dev": {
+    }
+}
+', $manipulator->getContents());
+    }
+
+    public function testAddSubNodeInRequire()
+    {
+        $manipulator = new JsonManipulator('{
+    "repositories": [
+        {
+            "package": {
+                "require": {
+                    "this/should-not-end-up-in-root-require": "~2.0"
+                },
+                "require-dev": {
+                    "this/should-not-end-up-in-root-require-dev": "~2.0"
+                }
+            }
+        }
+    ],
+    "require": {
+        "package/a": "*",
+        "package/b": "*"
+    },
+    "require-dev": {
+        "package/d": "*"
+    }
+}');
+
+        $this->assertTrue($manipulator->addSubNode('require', 'package/c', '*'));
+        $this->assertTrue($manipulator->addSubNode('require-dev', 'package/e', '*'));
+        $this->assertEquals('{
+    "repositories": [
+        {
+            "package": {
+                "require": {
+                    "this/should-not-end-up-in-root-require": "~2.0"
+                },
+                "require-dev": {
+                    "this/should-not-end-up-in-root-require-dev": "~2.0"
+                }
+            }
+        }
+    ],
+    "require": {
+        "package/a": "*",
+        "package/b": "*",
+        "package/c": "*"
+    },
+    "require-dev": {
+        "package/d": "*",
+        "package/e": "*"
+    }
+}
+', $manipulator->getContents());
     }
 
     public function testAddRepositoryCanInitializeEmptyRepositories()

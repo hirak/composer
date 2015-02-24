@@ -17,11 +17,9 @@ use Composer\Json\JsonFile;
 use Composer\IO\IOInterface;
 use Composer\Package\Archiver;
 use Composer\Repository\RepositoryManager;
-use Composer\Repository\RepositoryInterface;
 use Composer\Repository\WritableRepositoryInterface;
 use Composer\Util\ProcessExecutor;
 use Composer\Util\RemoteFilesystem;
-use Composer\Util\Filesystem;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Composer\EventDispatcher\EventDispatcher;
 use Composer\Autoload\AutoloadGenerator;
@@ -166,11 +164,14 @@ class Factory
         }
 
         foreach ($config->getRepositories() as $index => $repo) {
+            if (is_string($repo)) {
+                throw new \UnexpectedValueException('"repositories" should be an array of repository definitions, only a single repository was given');
+            }
             if (!is_array($repo)) {
-                throw new \UnexpectedValueException('Repository '.$index.' ('.json_encode($repo).') should be an array, '.gettype($repo).' given');
+                throw new \UnexpectedValueException('Repository "'.$index.'" ('.json_encode($repo).') should be an array, '.gettype($repo).' given');
             }
             if (!isset($repo['type'])) {
-                throw new \UnexpectedValueException('Repository '.$index.' ('.json_encode($repo).') must have a type defined');
+                throw new \UnexpectedValueException('Repository "'.$index.'" ('.json_encode($repo).') must have a type defined');
             }
             $name = is_int($index) && isset($repo['url']) ? preg_replace('{^https?://}i', '', $repo['url']) : $index;
             while (isset($repos[$name])) {

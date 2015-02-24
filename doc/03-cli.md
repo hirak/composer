@@ -87,7 +87,7 @@ resolution.
   installing a package, you can use `--dry-run`. This will simulate the
   installation and show you what would happen.
 * **--dev:** Install packages listed in `require-dev` (this is the default behavior).
-* **--no-dev:** Skip installing packages listed in `require-dev`.
+* **--no-dev:** Skip installing packages listed in `require-dev`. The autoloader generation skips the `autoload-dev` rules.
 * **--no-autoloader:** Skips autoloader generation.
 * **--no-scripts:** Skips execution of scripts defined in `composer.json`.
 * **--no-plugins:** Disables plugins.
@@ -130,7 +130,7 @@ php composer.phar update vendor/*
   fulfill these.
 * **--dry-run:** Simulate the command without actually doing anything.
 * **--dev:** Install packages listed in `require-dev` (this is the default behavior).
-* **--no-dev:** Skip installing packages listed in `require-dev`.
+* **--no-dev:** Skip installing packages listed in `require-dev`. The autoloader generation skips the `autoload-dev` rules.
 * **--no-autoloader:** Skips autoloader generation.
 * **--no-scripts:** Skips execution of scripts defined in `composer.json`.
 * **--no-plugins:** Disables plugins.
@@ -507,8 +507,13 @@ Lists the name, version and license of every package installed. Use
 
 ## run-script
 
+### Options
+
+* **--no-dev:** Disable dev mode
+* **--list:** List user defined scripts
+
 To run [scripts](articles/scripts.md) manually you can use this command,
-just give it the script name and optionally --no-dev to disable the dev mode.
+just give it the script name and optionally any required arguments.
 
 ## diagnose
 

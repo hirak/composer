@@ -33,6 +33,7 @@ use Composer\Json\JsonFile;
 use Composer\Package\AliasPackage;
 use Composer\Package\CompletePackage;
 use Composer\Package\Link;
+use Composer\Package\LinkConstraint\EmptyConstraint;
 use Composer\Package\LinkConstraint\VersionConstraint;
 use Composer\Package\Locker;
 use Composer\Package\PackageInterface;
@@ -191,7 +192,7 @@ class Installer
         if ($this->runScripts) {
             // dispatch pre event
             $eventName = $this->update ? ScriptEvents::PRE_UPDATE_CMD : ScriptEvents::PRE_INSTALL_CMD;
-            $this->eventDispatcher->dispatchCommandEvent($eventName, $this->devMode);
+            $this->eventDispatcher->dispatchScript($eventName, $this->devMode);
         }
 
         $this->downloadManager->setPreferSource($this->preferSource);
@@ -288,10 +289,10 @@ class Installer
                         $request->install($link->getTarget(), $link->getConstraint());
                     }
 
-                    $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::PRE_DEPENDENCIES_SOLVING, $policy, $pool, $installedRepo, $request);
+                    $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::PRE_DEPENDENCIES_SOLVING, false, $policy, $pool, $installedRepo, $request);
                     $solver = new Solver($policy, $pool, $installedRepo);
                     $ops = $solver->solve($request, $this->ignorePlatformReqs);
-                    $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::POST_DEPENDENCIES_SOLVING, $policy, $pool, $installedRepo, $request, $ops);
+                    $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::POST_DEPENDENCIES_SOLVING, false, $policy, $pool, $installedRepo, $request, $ops);
                     foreach ($ops as $op) {
                         if ($op->getJobType() === 'uninstall') {
                             $devPackages[] = $op->getPackage();
@@ -333,7 +334,7 @@ class Installer
             if ($this->runScripts) {
                 // dispatch post event
                 $eventName = $this->update ? ScriptEvents::POST_UPDATE_CMD : ScriptEvents::POST_INSTALL_CMD;
-                $this->eventDispatcher->dispatchCommandEvent($eventName, $this->devMode);
+                $this->eventDispatcher->dispatchScript($eventName, $this->devMode);
             }
 
             $vendorDir = $this->config->get('vendor-dir');
@@ -378,7 +379,7 @@ class Installer
 
         // creating repository pool
         $policy = $this->createPolicy();
-        $pool = $this->createPool($withDevReqs);
+        $pool = $this->createPool($withDevReqs, $lockedRepository);
         $pool->addRepository($installedRepo, $aliases);
         if ($installFromLock) {
             $pool->addRepository($lockedRepository, $aliases);
@@ -497,11 +498,11 @@ class Installer
         $this->processDevPackages($localRepo, $pool, $policy, $repositories, $lockedRepository, $installFromLock, 'force-links');
 
         // solve dependencies
-        $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::PRE_DEPENDENCIES_SOLVING, $policy, $pool, $installedRepo, $request);
+        $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::PRE_DEPENDENCIES_SOLVING, $this->devMode, $policy, $pool, $installedRepo, $request);
         $solver = new Solver($policy, $pool, $installedRepo);
         try {
             $operations = $solver->solve($request, $this->ignorePlatformReqs);
-            $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::POST_DEPENDENCIES_SOLVING, $policy, $pool, $installedRepo, $request, $operations);
+            $this->eventDispatcher->dispatchInstallerEvent(InstallerEvents::POST_DEPENDENCIES_SOLVING, $this->devMode, $policy, $pool, $installedRepo, $request, $operations);
         } catch (SolverProblemsException $e) {
             $this->io->write('<error>Your requirements could not be resolved to an installable set of packages.</error>');
             $this->io->write($e->getMessage());
@@ -561,9 +562,9 @@ class Installer
                 }
             }
 
-            $event = 'Composer\Script\ScriptEvents::PRE_PACKAGE_'.strtoupper($operation->getJobType());
+            $event = 'Composer\Installer\PackageEvents::PRE_PACKAGE_'.strtoupper($operation->getJobType());
             if (defined($event) && $this->runScripts) {
-                $this->eventDispatcher->dispatchPackageEvent(constant($event), $this->devMode, $operation);
+                $this->eventDispatcher->dispatchPackageEvent(constant($event), $this->devMode, $policy, $pool, $installedRepo, $request, $operations, $operation);
             }
 
             // output non-alias ops in dry run, output alias ops in debug verbosity
@@ -594,9 +595,9 @@ class Installer
                 }
             }
 
-            $event = 'Composer\Script\ScriptEvents::POST_PACKAGE_'.strtoupper($operation->getJobType());
+            $event = 'Composer\Installer\PackageEvents::POST_PACKAGE_'.strtoupper($operation->getJobType());
             if (defined($event) && $this->runScripts) {
-                $this->eventDispatcher->dispatchPackageEvent(constant($event), $this->devMode, $operation);
+                $this->eventDispatcher->dispatchPackageEvent(constant($event), $this->devMode, $policy, $pool, $installedRepo, $request, $operations, $operation);
             }
 
             if (!$this->dryRun) {
@@ -671,27 +672,39 @@ class Installer
         return array_merge($uninstOps, $operations);
     }
 
-    private function createPool($withDevReqs)
+    private function createPool($withDevReqs, RepositoryInterface $lockedRepository = null)
     {
-        $minimumStability = $this->package->getMinimumStability();
-        $stabilityFlags = $this->package->getStabilityFlags();
-
-        if (!$this->update && $this->locker->isLocked()) {
+        if (!$this->update && $this->locker->isLocked()) { // install from lock
             $minimumStability = $this->locker->getMinimumStability();
             $stabilityFlags = $this->locker->getStabilityFlags();
+
+            $requires = array();
+            foreach ($lockedRepository->getPackages() as $package) {
+                $constraint = new VersionConstraint('=', $package->getVersion());
+                $constraint->setPrettyString($package->getPrettyVersion());
+                $requires[$package->getName()] = $constraint;
+            }
+        } else {
+            $minimumStability = $this->package->getMinimumStability();
+            $stabilityFlags = $this->package->getStabilityFlags();
+
+            $requires = $this->package->getRequires();
+            if ($withDevReqs) {
+                $requires = array_merge($requires, $this->package->getDevRequires());
+            }
         }
 
-        $requires = $this->package->getRequires();
-        if ($withDevReqs) {
-            $requires = array_merge($requires, $this->package->getDevRequires());
-        }
         $rootConstraints = array();
         foreach ($requires as $req => $constraint) {
             // skip platform requirements from the root package to avoid filtering out existing platform packages
             if ($this->ignorePlatformReqs && preg_match(PlatformRepository::PLATFORM_PACKAGE_REGEX, $req)) {
                 continue;
             }
-            $rootConstraints[$req] = $constraint->getConstraint();
+            if ($constraint instanceof Link) {
+                $rootConstraints[$req] = $constraint->getConstraint();
+            } else {
+                $rootConstraints[$req] = $constraint;
+            }
         }
 
         return new Pool($minimumStability, $stabilityFlags, $rootConstraints);

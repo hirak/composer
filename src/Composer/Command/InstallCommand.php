@@ -75,6 +75,10 @@ EOT
             $input->setOption('no-plugins', true);
         }
 
+        if ($input->getOption('dev')) {
+            $output->writeln('<warning>You are using the deprecated option "dev". Dev packages are installed by default now.</warning>');
+        }
+
         $composer = $this->getComposer(true, $input->getOption('no-plugins'));
         $composer->getDownloadManager()->setOutputProgress(!$input->getOption('no-progress'));
         $io = $this->getIO();
@@ -106,7 +110,7 @@ EOT
             $preferDist = $input->getOption('prefer-dist');
         }
 
-        $optimize = $input->getOption('optimize-autoloader') || $config->get('optimize-autoloader');
+        $optimize = $input->getOption('optimize-autoloader') || $config->get('optimize-autoloader') || $config->get('classmap-authoritative');
 
         $install
             ->setDryRun($input->getOption('dry-run'))

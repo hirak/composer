@@ -54,8 +54,8 @@ The version of the package. In most cases this is not required and should
 be omitted (see below).
 
 This must follow the format of `X.Y.Z` or `vX.Y.Z` with an optional suffix
-of `-dev`, `-patch`, `-alpha`, `-beta` or `-RC`. The patch, alpha, beta and
-RC suffixes can also be followed by a number.
+of `-dev`, `-patch` (`-p`), `-alpha` (`-a`), `-beta` (`-b`) or `-RC`.
+The patch, alpha, beta and RC suffixes can also be followed by a number.
 
 Examples:
 
@@ -67,6 +67,7 @@ Examples:
 - 1.0.0-alpha3
 - 1.0.0-beta2
 - 1.0.0-RC5
+- v2.0.4-p1
 
 Optional if the package repository can infer the version from somewhere, such
 as the VCS tag name in the VCS repository. In that case it is also recommended
@@ -789,6 +790,9 @@ The following options are supported:
   the generated Composer autoloader. When null a random one will be generated.
 * **optimize-autoloader** Defaults to `false`. Always optimize when dumping
   the autoloader.
+* **classmap-authoritative:** Defaults to `false`. If true, the composer
+  autoloader will not scan the filesystem for classes that are not found in
+  the class map. Implies 'optimize-autoloader'.
 * **github-domains:** Defaults to `["github.com"]`. A list of domains to use in
   github mode. This is used for GitHub Enterprise setups.
 * **github-expose-hostname:** Defaults to `true`. If set to false, the OAuth
@@ -871,6 +875,38 @@ Example:
 
 The example will include `/dir/foo/bar/file`, `/foo/bar/baz`, `/file.php`,
 `/foo/my.test` but it will exclude `/foo/bar/any`, `/foo/baz`, and `/my.test`.
+
+Optional.
+
+### non-feature-branches
+
+A list of regex patterns of branch names that are non-numeric (e.g. "latest" or something), that will NOT be handled as feature branches. This is an array of string.
+
+If you have non-numeric branch names, for example like "latest", "current", "latest-stable"
+or something, that do not look like a version number, then composer handles such branches
+as feature branches. This means it searches for parent branches, that look like a version
+or ends at special branches (like master) and the root package version number becomes the
+version of the parent branch or at least master or something.
+
+To handle non-numeric named branches as versions instead of searching for a parent branch
+with a valid version or special branch name like master, you can set patterns for branch
+names, that should be handled as dev version branches.
+
+This is really helpful when you have dependencies using "self.version", so that not dev-master,
+but the same branch is installed (in the example: latest-testing).
+
+An example:
+
+If you have a testing branch, that is heavily maintained during a testing phase and is
+deployed to your staging environment, normally "composer show -s" will give you `versions : * dev-master`.
+
+If you configure latest-.* as a pattern for non-feature-branches like this:
+
+    {
+        "non-feature-branches": ["latest-.*"]
+    }
+
+Then "composer show -s" will give you `versions : * dev-latest-testing`.
 
 Optional.
 
