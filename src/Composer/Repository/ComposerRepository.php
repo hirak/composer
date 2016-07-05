@@ -289,12 +289,12 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
             $this->loadProviderListings($this->loadRootServerFile());
         }
 
-        $useLastModifiedCheck = false;
+        $useEtagCheck = false;
         if ($this->lazyProvidersUrl && !isset($this->providerListing[$name])) {
             $hash = null;
             $url = str_replace('%package%', $name, $this->lazyProvidersUrl);
             $cacheKey = 'provider-'.strtr($name, '/', '$').'.json';
-            $useLastModifiedCheck = true;
+            $useEtagCheck = true;
         } elseif ($this->providersUrl) {
             // package does not exist in this repo
             if (!isset($this->providerListing[$name])) {
@@ -310,13 +310,13 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
 
         $packages = null;
         if ($cacheKey) {
-            if (!$useLastModifiedCheck && $hash && $this->cache->sha256($cacheKey) === $hash) {
+            if (!$useEtagCheck && $hash && $this->cache->sha256($cacheKey) === $hash) {
                 $packages = json_decode($this->cache->read($cacheKey), true);
-            } elseif ($useLastModifiedCheck) {
+            } elseif ($useEtagCheck) {
                 if ($contents = $this->cache->read($cacheKey)) {
                     $contents = json_decode($contents, true);
                     if (isset($contents['last-modified'])) {
-                        $response = $this->fetchFileIfLastModified($url, $cacheKey, $contents['last-modified']);
+                        $response = $this->fetchFileIfLastModified($url, $cacheKey, $contents['etag']);
                         if (true === $response) {
                             $packages = $contents;
                         } elseif ($response) {
@@ -329,7 +329,7 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
 
         if (!$packages) {
             try {
-                $packages = $this->fetchFile($url, $cacheKey, $hash, $useLastModifiedCheck);
+                $packages = $this->fetchFile($url, $cacheKey, $hash, $useEtagCheck);
             } catch (TransportException $e) {
                 // 404s are acceptable for lazy provider repos
                 if ($e->getStatusCode() === 404 && $this->lazyProvidersUrl) {
@@ -620,7 +620,7 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
         }
     }
 
-    protected function fetchFile($filename, $cacheKey = null, $sha256 = null, $storeLastModifiedTime = false)
+    protected function fetchFile($filename, $cacheKey = null, $sha256 = null, $storeEtag = false)
     {
         if (null === $cacheKey) {
             $cacheKey = $filename;
@@ -664,10 +664,10 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
 
                 $data = JsonFile::parseJson($json, $filename);
                 if ($cacheKey) {
-                    if ($storeLastModifiedTime) {
-                        $lastModifiedDate = $rfs->findHeaderValue($rfs->getLastHeaders(), 'last-modified');
-                        if ($lastModifiedDate) {
-                            $data['last-modified'] = $lastModifiedDate;
+                    if ($storeEtag) {
+                        $etag = $rfs->findHeaderValue($rfs->getLastHeaders(), 'etag');
+                        if ($etag) {
+                            $data['etag'] = $etag;
                             $json = json_encode($data);
                         }
                     }
@@ -707,7 +707,7 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
         return $data;
     }
 
-    protected function fetchFileIfLastModified($filename, $cacheKey, $lastModifiedTime)
+    protected function fetchFileIfLastModified($filename, $cacheKey, $etag)
     {
         $retries = 3;
         while ($retries--) {
@@ -719,16 +719,16 @@ class ComposerRepository extends ArrayRepository implements ConfigurableReposito
 
                 $hostname = parse_url($filename, PHP_URL_HOST) ?: $filename;
                 $rfs = $preFileDownloadEvent->getRemoteFilesystem();
-                $options = array('http' => array('header' => array('If-Modified-Since: '.$lastModifiedTime)));
+                $options = array('http' => array('header' => array('If-None-Match: '.$etag)));
                 $json = $rfs->getContents($hostname, $filename, false, $options);
                 if ($json === '' && $rfs->findStatusCode($rfs->getLastHeaders()) === 304) {
                     return true;
                 }
 
                 $data = JsonFile::parseJson($json, $filename);
-                $lastModifiedDate = $rfs->findHeaderValue($rfs->getLastHeaders(), 'last-modified');
-                if ($lastModifiedDate) {
-                    $data['last-modified'] = $lastModifiedDate;
+                $etag = $rfs->findHeaderValue($rfs->getLastHeaders(), 'etag');
+                if ($etag) {
+                    $data['etag'] = $etag;
                     $json = json_encode($data);
                 }
                 $this->cache->write($cacheKey, $json);
